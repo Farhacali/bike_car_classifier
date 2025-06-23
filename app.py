@@ -1,8 +1,19 @@
+import os
 import torch
 import torch.nn as nn
 from torchvision import models, transforms
 from PIL import Image
 import gradio as gr
+import gdown
+
+# 🔽 Download model if not already present
+model_path = "model/bike_car_model.pth"
+gdrive_url = "https://drive.google.com/uc?id=1F7Uat_TJNUYZNF0YbwdrkqL1-zrg6Bjh"
+
+if not os.path.exists(model_path):
+    os.makedirs("model", exist_ok=True)
+    print("📥 Downloading model from Google Drive...")
+    gdown.download(gdrive_url, model_path, quiet=False)
 
 # Set device
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -10,7 +21,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # Load ResNet18 model (NOT ResNet50)
 model = models.resnet18(weights=None)
 model.fc = nn.Linear(model.fc.in_features, 2)
-model.load_state_dict(torch.load("model/bike_car_model.pth", map_location=device))
+model.load_state_dict(torch.load(model_path, map_location=device))
 model = model.to(device)
 model.eval()
 
@@ -21,7 +32,7 @@ labels = ['Bike', 'Car']
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
-    transforms.Normalize([0.485, 0.456, 0.406],  # VERY IMPORTANT for pretrained ResNet
+    transforms.Normalize([0.485, 0.456, 0.406],
                          [0.229, 0.224, 0.225])
 ])
 
@@ -44,4 +55,6 @@ interface = gr.Interface(
     theme="soft"
 )
 
-interface.launch()
+# Run
+if __name__ == "__main__":
+    interface.launch()
