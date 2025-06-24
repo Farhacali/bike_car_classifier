@@ -6,29 +6,25 @@ from PIL import Image
 import gradio as gr
 import gdown
 
-# 🔽 Download model if not already present
+# Download model from Google Drive if not already present
+os.makedirs("model", exist_ok=True)
 model_path = "model/bike_car_model.pth"
-gdrive_url = "https://drive.google.com/uc?id=1F7Uat_TJNUYZNF0YbwdrkqL1-zrg6Bjh"
+file_id = "1F7Uat_TJNUYZNF0YbwdrkqL1-zrg6Bjh"
 
 if not os.path.exists(model_path):
-    os.makedirs("model", exist_ok=True)
     print("📥 Downloading model from Google Drive...")
-    gdown.download(gdrive_url, model_path, quiet=False)
+    gdown.download(f"https://drive.google.com/uc?id={file_id}", model_path, quiet=False)
 
-# Set device
+# Load ResNet18 model
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Load ResNet18 model (NOT ResNet50)
 model = models.resnet18(weights=None)
 model.fc = nn.Linear(model.fc.in_features, 2)
 model.load_state_dict(torch.load(model_path, map_location=device))
-model = model.to(device)
+model.to(device)
 model.eval()
 
-# Labels
+# Labels and transforms
 labels = ['Bike', 'Car']
-
-# Transform
 transform = transforms.Compose([
     transforms.Resize((224, 224)),
     transforms.ToTensor(),
@@ -36,25 +32,33 @@ transform = transforms.Compose([
                          [0.229, 0.224, 0.225])
 ])
 
-# Prediction function
-def classify_image(image):
-    img = image.convert('RGB')
+# Prediction logic like Cat/Dog example
+def predict_image(img):
+    img = img.convert("RGB")
     img_tensor = transform(img).unsqueeze(0).to(device)
-    with torch.no_grad():
-        outputs = model(img_tensor)
-        probs = torch.nn.functional.softmax(outputs, dim=1)[0]
-        return {labels[i]: float(probs[i]) for i in range(2)}
 
-# Gradio UI
+    with torch.no_grad():
+        output = model(img_tensor)
+        probs = torch.nn.functional.softmax(output, dim=1)[0]
+        confidence = probs[1].item()  # Car confidence
+
+        if confidence > 0.95:
+            return "✅ Prediction: It's a Car 🚗"
+        elif confidence < 0.05:
+            return "✅ Prediction: It's a Bike 🏍️"
+        else:
+            return "❌ This image doesn't appear to be a clear bike or car."
+
+# Gradio interface
 interface = gr.Interface(
-    fn=classify_image,
+    fn=predict_image,
     inputs=gr.Image(type="pil"),
-    outputs=gr.Label(num_top_classes=2),
-    title="Bike vs Car Classifier",
-    description="Upload an image to classify it as either a bike 🏍️ or a car 🚗",
+    outputs="text",
+    title="🚘 Bike vs Car Image Classifier",
+    description="Upload an image and let AI decide whether it's a Bike 🏍️ or a Car 🚗",
     theme="soft"
 )
 
-# Run
 if __name__ == "__main__":
-    interface.launch(server_name="0.0.0.0", server_port=8080)
+    interface.launch()
+
